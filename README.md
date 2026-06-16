@@ -19,8 +19,11 @@ It is intentionally simple, readable, and easy to extend.
 - `rag_course/cli.py` contains command-line argument parsing and dispatch.
 - `rag_course/config.py` loads environment variables and validates configuration.
 - `rag_course/embeddings.py` contains reusable embedding helpers and similarity math.
+- `rag_course/chunker.py` contains the reusable plain-text chunker.
+- `rag_course/sources.py` reads local files and HTTP sources.
 - `rag_course/commands/` contains individual command implementations.
 - `rag_course/__main__.py` provides the module entry point.
+- `docker-compose.yml` runs local infrastructure needed for vector storage.
 
 ## Environment setup
 
@@ -28,6 +31,13 @@ It is intentionally simple, readable, and easy to extend.
 2. Install dependencies with `pip install -r requirements.txt`.
 3. Copy `.env.example` to `.env` and adjust values as needed.
 4. Run the app with `python -m rag_course --help`.
+5. Start Qdrant locally with `docker compose up -d`.
+
+## Local vector store
+
+- `docker-compose.yml` starts Qdrant on ports `6333` and `6334`.
+- Qdrant persists data in the local `./qdrant_storage` directory.
+- Keep that directory out of version control; it is ignored by `.gitignore`.
 
 ## CLI commands
 
@@ -35,12 +45,25 @@ It is intentionally simple, readable, and easy to extend.
 - `python -m rag_course status` shows the loaded configuration.
 - `python -m rag_course embed "some text"` prints the embedding vector.
 - `python -m rag_course similarity` prompts for two lines and prints cosine similarity.
+- `python -m rag_course chunk INPUT OUTPUT` reads a local file path or an `http(s)` URL and writes chunk metadata to YAML.
+
+## Chunking rules
+
+- Chunking is sentence-based and respects paragraph boundaries.
+- Headings in the form `1. Jakobs Haus.(1)` are treated as metadata, not chunk text.
+- Chunks never split a sentence in half.
+- Chunks with `min_words_per_chunk` or fewer words are dropped. The default is `2`.
+- Estimated token count uses `1 word = 1.3 tokens`.
+- Default chunking uses `250` max tokens, `3` target sentences, and `1` sentence overlap.
+- Dialogues and quoted passages stay together as long as the token budget allows.
+- Intended text blocks are treated as summaries.
 
 ## Embedding configuration
 
 - `OPENAI_BASE_URL` sets an OpenAI-compatible endpoint. Leave it empty to use the default OpenAI API URL.
 - `OPENAI_API_KEY` sets the authentication token used by the client.
 - `EMBEDDING_MODEL` sets the embedding model. The default is `text-embedding-3-small`.
+- `--min-words` on the chunk command controls the minimum kept chunk length. The default is `2`.
 
 ## Maintenance notes
 

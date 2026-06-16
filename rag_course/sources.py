@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timezone
 from pathlib import Path
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -43,7 +45,7 @@ def _read_http_source(url: str) -> TextSource:
         raw_bytes = response.read()
         charset = response.headers.get_content_charset() or "utf-8"
         media_type = response.headers.get_content_type()
-        last_modified = response.headers.get("Last-Modified")
+        last_modified = _rfc3339_from_http_date(response.headers.get("Last-Modified"))
 
     return TextSource(
         text=raw_bytes.decode(charset, errors="replace"),
@@ -52,3 +54,14 @@ def _read_http_source(url: str) -> TextSource:
         last_modified=last_modified,
     )
 
+
+def _rfc3339_from_http_date(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    parsed = parsedate_to_datetime(value)
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()

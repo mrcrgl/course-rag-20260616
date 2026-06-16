@@ -44,6 +44,9 @@ It is intentionally simple, readable, and easy to extend.
 - `python -m rag_course hello [name]` prints a greeting.
 - `python -m rag_course status` shows the loaded configuration.
 - `python -m rag_course embed "some text"` prints the embedding vector.
+- `python -m rag_course embed-chunks INPUT OUTPUT` reads chunk YAML and writes a new YAML file with embeddings.
+- `python -m rag_course import-embeddings INPUT` imports an embedded YAML file into Qdrant.
+- `python -m rag_course query [term ...]` searches Qdrant with a prompt or asks for one interactively.
 - `python -m rag_course similarity` prompts for two lines and prints cosine similarity.
 - `python -m rag_course chunk INPUT OUTPUT` reads a local file path or an `http(s)` URL and writes chunk metadata to YAML.
 
@@ -63,7 +66,12 @@ It is intentionally simple, readable, and easy to extend.
 - `OPENAI_BASE_URL` sets an OpenAI-compatible endpoint. Leave it empty to use the default OpenAI API URL.
 - `OPENAI_API_KEY` sets the authentication token used by the client.
 - `EMBEDDING_MODEL` sets the embedding model. The default is `text-embedding-3-small`.
+- `QDRANT_URL` sets the Qdrant endpoint. The default is `http://localhost:9333`, which matches the exposed Docker Compose port.
+- `QDRANT_COLLECTION_NAME` sets the target collection name. The default is `rag_chunks`.
+- `QDRANT_VECTOR_SIZE` sets the collection vector length. The default is `1536`.
+- `QDRANT_API_KEY` sets an optional Qdrant API key.
 - `--min-words` on the chunk command controls the minimum kept chunk length. The default is `2`.
+- `--batch-size` on the `embed-chunks` command controls how many chunks are sent per embedding request. The default is `64`.
 
 ## Maintenance notes
 

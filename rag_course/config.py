@@ -20,6 +20,10 @@ class AppConfig:
     openai_base_url: str | None = None
     openai_api_key: str | None = None
     embedding_model: str = "text-embedding-3-small"
+    qdrant_url: str = "http://localhost:9333"
+    qdrant_collection_name: str = "rag_chunks"
+    qdrant_vector_size: int = 1536
+    qdrant_api_key: str | None = None
 
 
 DEFAULT_CONFIG = AppConfig()
@@ -41,6 +45,19 @@ def load_config() -> AppConfig:
             os.getenv("EMBEDDING_MODEL"),
             default=DEFAULT_CONFIG.embedding_model,
         ),
+        qdrant_url=_value_or_default(
+            os.getenv("QDRANT_URL"),
+            default=DEFAULT_CONFIG.qdrant_url,
+        ),
+        qdrant_collection_name=_value_or_default(
+            os.getenv("QDRANT_COLLECTION_NAME"),
+            default=DEFAULT_CONFIG.qdrant_collection_name,
+        ),
+        qdrant_vector_size=_as_int(
+            os.getenv("QDRANT_VECTOR_SIZE"),
+            default=DEFAULT_CONFIG.qdrant_vector_size,
+        ),
+        qdrant_api_key=_optional_str(os.getenv("QDRANT_API_KEY")),
     )
 
 
@@ -71,3 +88,15 @@ def _value_or_default(raw: str | None, *, default: str) -> str:
         return default
     value = raw.strip()
     return value or default
+
+
+def _as_int(raw: str | None, *, default: int) -> int:
+    if raw is None:
+        return default
+    value = raw.strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default

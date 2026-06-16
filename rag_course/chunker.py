@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import math
 import re
+from uuid import uuid4
 from typing import Iterable
 
 
@@ -29,6 +30,7 @@ class ChunkerConfig:
 class ChunkMetadata:
     """Optional metadata attached to each chunk."""
 
+    uuid: str | None = None
     canonical_url: str | None = None
     references: list[ContentId] = field(default_factory=list)
     page_number: int | None = None
@@ -250,7 +252,8 @@ def _chunk_paragraph(
                     paragraph_number=paragraph_number,
                     position_start=chunk_start,
                     position_end=chunk_end,
-                    created_at=datetime.now(timezone.utc).isoformat(),
+                    created_at=_rfc3339_now(),
+                    uuid=str(uuid4()),
                     max_tokens_per_chunk=config.max_tokens_per_chunk,
                     overlap_sentences=config.overlap_sentences,
                     target_sentences_per_chunk=config.target_sentences_per_chunk,
@@ -327,3 +330,7 @@ def _replace_metadata(metadata: ChunkMetadata, **updates: object) -> ChunkMetada
     data = asdict(metadata)
     data.update(updates)
     return ChunkMetadata(**data)
+
+
+def _rfc3339_now() -> str:
+    return datetime.now(timezone.utc).isoformat()

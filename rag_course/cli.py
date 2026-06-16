@@ -6,7 +6,10 @@ import argparse
 from typing import Sequence
 
 from rag_course.commands.chunk import run_chunk
+from rag_course.commands.embed_chunks import run_embed_chunks
+from rag_course.commands.import_embeddings import run_import_embeddings
 from rag_course.commands.embeddings import run_embed, run_similarity
+from rag_course.commands.query import run_query
 from rag_course.commands.hello import run as run_hello
 from rag_course.commands.status import format_status
 from rag_course.config import load_config
@@ -71,6 +74,31 @@ def build_parser() -> argparse.ArgumentParser:
         "--pii-classification",
         help="Optional PII classification metadata.",
     )
+
+    embed_chunks_parser = subparsers.add_parser(
+        "embed-chunks",
+        help="Read chunk YAML and write a new YAML file with embeddings.",
+    )
+    embed_chunks_parser.add_argument("input", help="Chunk YAML file to read.")
+    embed_chunks_parser.add_argument("output", help="YAML file to write.")
+    embed_chunks_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Number of chunks to embed per API request.",
+    )
+
+    import_embeddings_parser = subparsers.add_parser(
+        "import-embeddings",
+        help="Import an embedded chunk YAML file into Qdrant.",
+    )
+    import_embeddings_parser.add_argument("input", help="Embedded YAML file to import.")
+
+    query_parser = subparsers.add_parser(
+        "query",
+        help="Search Qdrant with a natural-language prompt.",
+    )
+    query_parser.add_argument("term", nargs="*", help="Optional search term.")
     return parser
 
 
@@ -115,8 +143,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 embedding_model=config.embedding_model,
             )
             return 0
+
+        if args.command == "embed-chunks":
+            run_embed_chunks(
+                config,
+                args.input,
+                args.output,
+                batch_size=args.batch_size,
+            )
+            return 0
+
+        if args.command == "import-embeddings":
+            run_import_embeddings(config, args.input)
+            return 0
+
+        if args.command == "query":
+            term = " ".join(args.term).strip() if args.term else ""
+            if not term:
+                term = _prompt_text("Search term: ")
+            run_query(config, term)
+            return 0
     except ValueError as exc:
         parser.error(str(exc))
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
+
+
+def _prompt_text(prompt: str) -> str:
+    try:
+        import readline  # noqa: F401
+    except ImportError:
+        pass
+    return input(prompt).strip()

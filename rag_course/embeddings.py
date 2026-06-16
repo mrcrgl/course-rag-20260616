@@ -19,6 +19,14 @@ class EmbeddingResult:
     model: str
 
 
+@dataclass(frozen=True, slots=True)
+class EmbeddingBatchResult:
+    """Normalized embedding output for a batch of inputs."""
+
+    vectors: list[list[float]]
+    model: str
+
+
 def build_client(config: AppConfig) -> OpenAI:
     """Create an OpenAI client using the configured endpoint and token."""
 
@@ -44,6 +52,17 @@ def create_embedding(client: OpenAI, *, text: str, model: str) -> EmbeddingResul
     )
     vector = list(response.data[0].embedding)
     return EmbeddingResult(vector=vector, model=response.model)
+
+
+def create_embeddings(client: OpenAI, *, texts: Sequence[str], model: str) -> EmbeddingBatchResult:
+    """Request embedding vectors for a batch of texts."""
+
+    response = client.embeddings.create(
+        input=list(texts),
+        model=model,
+    )
+    vectors = [list(item.embedding) for item in response.data]
+    return EmbeddingBatchResult(vectors=vectors, model=response.model)
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:

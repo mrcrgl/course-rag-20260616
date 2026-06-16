@@ -67,29 +67,37 @@ class _Sentence:
     end: int
 
 
+@dataclass(frozen=True, slots=True)
+class _Paragraph:
+    text: str
+    start: int
+    end: int
+    number: int
+
+
 _HEADING_RE = re.compile(r"^\s*(?P<num>\d+(?:\.\d+)*)\.\s+(?P<title>.+?)\.\((?P<page>\d+)\)\s*$")
 _SENTENCE_RE = re.compile(r".+?(?:[.!?]+(?:[»”\"']+)?(?:\s+|$)|$)", re.DOTALL)
 _INLINE_MARKUP_RE = re.compile(
     r"(?<!\w)=([^=\n]+?)=(?!\w)|(?<!\w)_([^_\n]+?)_(?!\w)|(?<!\w)~([^~\n]+?)~(?!\w)"
 )
+_TERMINAL_SECTION_TITLES = {
+    "Kleine Gedichte.",
+    "VOCABULARY.",
+}
 
 
 def chunk_text(text: str, *, config: ChunkerConfig, base_metadata: ChunkMetadata | None = None) -> list[Chunk]:
     """Chunk plain text into sentence-aligned paragraph windows."""
 
     metadata_defaults = base_metadata or ChunkMetadata()
-    paragraphs = _split_paragraphs(text)
+    paragraphs = _merge_dialogue_paragraphs(text, _extract_paragraphs(text))
     chunks: list[Chunk] = []
     heading_state = {"headline_1": None, "headline_2": None, "headline_3": None}
-    cursor = 0
 
-    for paragraph_number, paragraph in enumerate(paragraphs, start=1):
-        paragraph_start = text.find(paragraph, cursor)
-        if paragraph_start < 0:
-            paragraph_start = cursor
-        cursor = paragraph_start + len(paragraph)
+    for paragraph in paragraphs:
+        paragraph_text = paragraph.text
 
-        heading_match = _HEADING_RE.match(paragraph)
+        heading_match = _HEADING_RE.match(paragraph_text)
         if heading_match:
             level = len(heading_match.group("num").split("."))
             title = heading_match.group("title").strip()
@@ -104,15 +112,18 @@ def chunk_text(text: str, *, config: ChunkerConfig, base_metadata: ChunkMetadata
             )
             continue
 
-        sentences = _split_sentences(paragraph)
+        if _is_terminal_section(paragraph_text):
+            break
+
+        sentences = _split_sentences(paragraph_text)
         if not sentences:
             continue
 
         chunks.extend(
             _chunk_paragraph(
                 sentences,
-                paragraph_start=paragraph_start,
-                paragraph_number=paragraph_number,
+                paragraph_start=paragraph.start,
+                paragraph_number=paragraph.number,
                 config=config,
                 metadata_defaults=metadata_defaults,
             )
@@ -127,8 +138,57 @@ def chunk_to_dict(chunk: Chunk) -> dict[str, object]:
     return {"text": chunk.text, "metadata": asdict(chunk.metadata)}
 
 
+def _extract_paragraphs(text: str) -> list[_Paragraph]:
+    paragraphs: list[_Paragraph] = []
+    cursor = 0
+    for paragraph_number, paragraph in enumerate(_split_paragraphs(text), start=1):
+        paragraph_start = text.find(paragraph, cursor)
+        if paragraph_start < 0:
+            paragraph_start = cursor
+        paragraph_end = paragraph_start + len(paragraph)
+        cursor = paragraph_end
+        paragraphs.append(
+            _Paragraph(
+                text=paragraph,
+                start=paragraph_start,
+                end=paragraph_end,
+                number=paragraph_number,
+            )
+        )
+    return paragraphs
+
+
 def _split_paragraphs(text: str) -> list[str]:
     return [paragraph.strip() for paragraph in re.split(r"\n\s*\n+", text.strip()) if paragraph.strip()]
+
+
+def _merge_dialogue_paragraphs(source_text: str, paragraphs: list[_Paragraph]) -> list[_Paragraph]:
+    merged: list[_Paragraph] = []
+    index = 0
+    while index < len(paragraphs):
+        current = paragraphs[index]
+        if index + 1 < len(paragraphs) and _should_merge_dialogue_paragraphs(current.text, paragraphs[index + 1].text):
+            following = paragraphs[index + 1]
+            merged.append(
+                _Paragraph(
+                    text=source_text[current.start:following.end],
+                    start=current.start,
+                    end=following.end,
+                    number=current.number,
+                )
+            )
+            index += 2
+            continue
+
+        merged.append(current)
+        index += 1
+    return merged
+
+
+def _should_merge_dialogue_paragraphs(current: str, following: str) -> bool:
+    """Keep a dialogue lead-in with the direct speech that follows it."""
+
+    return current.rstrip().endswith(":") and following.lstrip().startswith("»")
 
 
 def _split_sentences(paragraph: str) -> list[_Sentence]:
@@ -223,6 +283,17 @@ def _normalize_inline_markup(text: str) -> str:
 
     normalized = _INLINE_MARKUP_RE.sub(_replace, text)
     return re.sub(r"\s{2,}", " ", normalized).strip()
+
+
+def _is_terminal_section(paragraph: str) -> bool:
+    """Stop at auxiliary sections that are not part of the story text.
+
+    The Project Gutenberg reader text used in this course appends poems and a
+    vocabulary section after the main story collection. Those sections are
+    useful in the source edition but should not be indexed as narrative chunks.
+    """
+
+    return paragraph.strip() in _TERMINAL_SECTION_TITLES
 
 
 def _word_count(text: str) -> int:

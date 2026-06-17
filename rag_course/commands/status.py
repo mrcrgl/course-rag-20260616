@@ -13,6 +13,7 @@ def format_status(config: AppConfig) -> str:
         f"Environment: {config.app_env}",
         f"Verbose: {config.app_verbose}",
         f"Default name: {config.default_name}",
+        f"Chat model: {config.chat_model}",
         f"Qdrant URL: {config.qdrant_url}",
         f"Qdrant collection: {config.qdrant_collection_name}",
         f"Qdrant vector size: {config.qdrant_vector_size}",

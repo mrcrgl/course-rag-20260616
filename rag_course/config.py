@@ -20,6 +20,7 @@ class AppConfig:
     openai_base_url: str | None = None
     openai_api_key: str | None = None
     embedding_model: str = "text-embedding-3-small"
+    chat_model: str = "gpt-4.1-mini"
     qdrant_url: str = "http://localhost:9333"
     qdrant_collection_name: str = "rag_chunks"
     qdrant_vector_size: int = 1536
@@ -44,6 +45,10 @@ def load_config() -> AppConfig:
         embedding_model=_value_or_default(
             os.getenv("EMBEDDING_MODEL"),
             default=DEFAULT_CONFIG.embedding_model,
+        ),
+        chat_model=_value_or_default(
+            os.getenv("CHAT_MODEL"),
+            default=DEFAULT_CONFIG.chat_model,
         ),
         qdrant_url=_value_or_default(
             os.getenv("QDRANT_URL"),

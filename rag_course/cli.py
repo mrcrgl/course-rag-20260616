@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from typing import Sequence
 
+from rag_course.commands.chat import run_chat
 from rag_course.commands.chunk import run_chunk
 from rag_course.commands.embed_chunks import run_embed_chunks
-from rag_course.commands.import_embeddings import run_import_embeddings
 from rag_course.commands.embeddings import run_embed, run_similarity
-from rag_course.commands.query import run_query
 from rag_course.commands.hello import run as run_hello
+from rag_course.commands.import_embeddings import run_import_embeddings
+from rag_course.commands.query import run_query
 from rag_course.commands.status import format_status
 from rag_course.config import load_config
 
@@ -27,12 +29,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("status", help="Show the loaded configuration.")
 
-    embed_parser = subparsers.add_parser("embed", help="Create an embedding for a text.")
+    embed_parser = subparsers.add_parser(
+        "embed", help="Create an embedding for a text."
+    )
     embed_parser.add_argument("text", nargs="+", help="Text to embed.")
 
     subparsers.add_parser(
         "similarity",
         help="Prompt for two texts and print their cosine similarity.",
+    )
+
+    subparsers.add_parser(
+        "chat",
+        help="Start an interactive chat loop with the LLM.",
     )
 
     chunk_parser = subparsers.add_parser(
@@ -106,6 +115,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = load_config()
+    logging.basicConfig(
+        level=logging.DEBUG if config.app_verbose else logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
 
     try:
         if args.command == "hello":
@@ -126,6 +139,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.command == "similarity":
             run_similarity(config)
+            return 0
+
+        if args.command == "chat":
+            run_chat(config)
             return 0
 
         if args.command == "chunk":

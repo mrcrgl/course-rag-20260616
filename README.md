@@ -47,6 +47,7 @@ It is intentionally simple, readable, and easy to extend.
 - `python -m rag_course embed-chunks INPUT OUTPUT` reads chunk YAML and writes a new YAML file with embeddings.
 - `python -m rag_course import-embeddings INPUT` imports an embedded YAML file into Qdrant.
 - `python -m rag_course query [term ...]` searches Qdrant with a prompt or asks for one interactively.
+- `python -m rag_course chat` starts an interactive LLM chat loop and writes audit logs to `auditlog/`.
 - `python -m rag_course similarity` prompts for two lines and prints cosine similarity.
 - `python -m rag_course chunk INPUT OUTPUT` reads a local file path or an `http(s)` URL and writes chunk metadata to YAML.
 
@@ -66,6 +67,7 @@ It is intentionally simple, readable, and easy to extend.
 - `OPENAI_BASE_URL` sets an OpenAI-compatible endpoint. Leave it empty to use the default OpenAI API URL.
 - `OPENAI_API_KEY` sets the authentication token used by the client.
 - `EMBEDDING_MODEL` sets the embedding model. The default is `text-embedding-3-small`.
+- `CHAT_MODEL` sets the chat model used by the interactive chat loop. The default is `gpt-4.1-mini`.
 - `QDRANT_URL` sets the Qdrant endpoint. The default is `http://localhost:9333`, which matches the exposed Docker Compose port.
 - `QDRANT_COLLECTION_NAME` sets the target collection name. The default is `rag_chunks`.
 - `QDRANT_VECTOR_SIZE` sets the collection vector length. The default is `1536`.

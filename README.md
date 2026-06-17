@@ -68,6 +68,10 @@ It is intentionally simple, readable, and easy to extend.
 - `OPENAI_API_KEY` sets the authentication token used by the client.
 - `EMBEDDING_MODEL` sets the embedding model. The default is `text-embedding-3-small`.
 - `CHAT_MODEL` sets the chat model used by the interactive chat loop. The default is `gpt-4.1-mini`.
+- `RAG_SCORE_THRESHOLD` sets the minimum similarity score used when retrieving context for chat. The default is `0.5`.
+- `RAG_TOP_K` sets how many retrieval candidates are requested before budgeting. The default is `5`.
+- `RAG_CONTEXT_TOKEN_BUDGET_TOTAL` sets the total token budget for RAG context injection. The default is `800`.
+- `RAG_CONTEXT_TOKEN_BUDGET_PER_ENTRY` sets the token budget for each retrieved entry. The default is `200`.
 - `QDRANT_URL` sets the Qdrant endpoint. The default is `http://localhost:9333`, which matches the exposed Docker Compose port.
 - `QDRANT_COLLECTION_NAME` sets the target collection name. The default is `rag_chunks`.
 - `QDRANT_VECTOR_SIZE` sets the collection vector length. The default is `1536`.

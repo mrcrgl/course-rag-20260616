@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from rag_course.commands.query import run_query
+from rag_course.commands.query import RagResult, build_rag_context
 from rag_course.config import AppConfig
 
 
@@ -74,6 +75,24 @@ class QueryTests(unittest.TestCase):
         self.assertIn("score=0.9100", output)
         self.assertIn("id=00000000-0000-0000-0000-000000000001", output)
         self.assertIn("First matching chunk with enough details.", output)
+
+    def test_build_rag_context_trims_to_budget(self) -> None:
+        result = RagResult(
+            point_id="00000000-0000-0000-0000-000000000001",
+            score=0.91,
+            text=" ".join(f"word{i}" for i in range(200)),
+            metadata={"page_number": 15, "headline_1": "Story"},
+        )
+
+        context = build_rag_context(
+            [result],
+            total_token_budget=30,
+            per_entry_token_budget=20,
+        )
+
+        self.assertIn("Retrieved context:", context)
+        self.assertIn("Result 1:", context)
+        self.assertLess(len(context), len(result.text))
 
 
 if __name__ == "__main__":

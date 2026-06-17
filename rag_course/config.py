@@ -21,6 +21,10 @@ class AppConfig:
     openai_api_key: str | None = None
     embedding_model: str = "text-embedding-3-small"
     chat_model: str = "gpt-4.1-mini"
+    rag_score_threshold: float = 0.5
+    rag_top_k: int = 5
+    rag_context_token_budget_total: int = 800
+    rag_context_token_budget_per_entry: int = 200
     qdrant_url: str = "http://localhost:9333"
     qdrant_collection_name: str = "rag_chunks"
     qdrant_vector_size: int = 1536
@@ -49,6 +53,22 @@ def load_config() -> AppConfig:
         chat_model=_value_or_default(
             os.getenv("CHAT_MODEL"),
             default=DEFAULT_CONFIG.chat_model,
+        ),
+        rag_score_threshold=_as_float(
+            os.getenv("RAG_SCORE_THRESHOLD"),
+            default=DEFAULT_CONFIG.rag_score_threshold,
+        ),
+        rag_top_k=_as_int(
+            os.getenv("RAG_TOP_K"),
+            default=DEFAULT_CONFIG.rag_top_k,
+        ),
+        rag_context_token_budget_total=_as_int(
+            os.getenv("RAG_CONTEXT_TOKEN_BUDGET_TOTAL"),
+            default=DEFAULT_CONFIG.rag_context_token_budget_total,
+        ),
+        rag_context_token_budget_per_entry=_as_int(
+            os.getenv("RAG_CONTEXT_TOKEN_BUDGET_PER_ENTRY"),
+            default=DEFAULT_CONFIG.rag_context_token_budget_per_entry,
         ),
         qdrant_url=_value_or_default(
             os.getenv("QDRANT_URL"),
@@ -103,5 +123,17 @@ def _as_int(raw: str | None, *, default: int) -> int:
         return default
     try:
         return int(value)
+    except ValueError:
+        return default
+
+
+def _as_float(raw: str | None, *, default: float) -> float:
+    if raw is None:
+        return default
+    value = raw.strip()
+    if not value:
+        return default
+    try:
+        return float(value)
     except ValueError:
         return default

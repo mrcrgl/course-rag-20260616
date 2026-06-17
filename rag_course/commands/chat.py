@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from openai import OpenAI
 
+from rag_course.commands.query import RagResult, build_rag_context, retrieve_rag_results
 from rag_course.config import AppConfig
 from rag_course.embeddings import build_client
 
@@ -31,9 +32,9 @@ class ChatUsage:
 def run_chat(config: AppConfig) -> int:
     """Run an interactive chat loop and persist per-turn audit logs."""
 
-    system_prompt = _read_system_prompt()
+    base_system_prompt = _read_system_prompt()
     client = build_client(config)
-    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    conversation: list[dict[str, str]] = []
     session_id = _session_id()
     audit_dir = _project_root() / "auditlog"
     audit_dir.mkdir(parents=True, exist_ok=True)
@@ -52,21 +53,41 @@ def run_chat(config: AppConfig) -> int:
             break
 
         turn += 1
-        request_messages = [*messages, {"role": "user", "content": user_prompt}]
+        rag_results = retrieve_rag_results(
+            config,
+            user_prompt,
+            top_k=config.rag_top_k,
+            score_threshold=config.rag_score_threshold,
+        )
+        rag_context = build_rag_context(
+            rag_results,
+            total_token_budget=config.rag_context_token_budget_total,
+            per_entry_token_budget=config.rag_context_token_budget_per_entry,
+        )
+        effective_system_prompt = _compose_system_prompt(base_system_prompt, rag_context)
+
+        request_messages = [
+            {"role": "system", "content": effective_system_prompt},
+            *conversation,
+            {"role": "user", "content": user_prompt},
+        ]
         response_text, usage, latency_seconds = _stream_response(
             client,
             config=config,
             messages=request_messages,
         )
+        response_text = _append_response_footer(response_text, rag_results)
 
-        messages.append({"role": "user", "content": user_prompt})
-        messages.append({"role": "assistant", "content": response_text})
+        conversation.append({"role": "user", "content": user_prompt})
+        conversation.append({"role": "assistant", "content": response_text})
 
         audit_path = _write_audit_entry(
             audit_dir,
             session_id=session_id,
             turn=turn,
-            system_prompt=system_prompt,
+            base_system_prompt=base_system_prompt,
+            rag_context=rag_context,
+            retrieved_results=rag_results,
             request_messages=request_messages,
             response_text=response_text,
             usage=usage,
@@ -74,16 +95,23 @@ def run_chat(config: AppConfig) -> int:
             model=config.chat_model,
         )
         logger.debug(
-            "chat turn=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s latency_ms=%.0f audit=%s",
+            "chat turn=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s latency_ms=%.0f rag_results=%s audit=%s",
             turn,
             usage.prompt_tokens if usage else None,
             usage.completion_tokens if usage else None,
             usage.total_tokens if usage else None,
             latency_seconds * 1000.0,
+            len(rag_results),
             audit_path,
         )
 
     return turn
+
+
+def _compose_system_prompt(base_system_prompt: str, rag_context: str) -> str:
+    if not rag_context:
+        return base_system_prompt
+    return "\n\n".join([base_system_prompt, rag_context]).strip()
 
 
 def _stream_response(
@@ -129,7 +157,9 @@ def _write_audit_entry(
     *,
     session_id: str,
     turn: int,
-    system_prompt: str,
+    base_system_prompt: str,
+    rag_context: str,
+    retrieved_results: list[RagResult],
     request_messages: list[dict[str, str]],
     response_text: str,
     usage: ChatUsage | None,
@@ -149,12 +179,65 @@ def _write_audit_entry(
             "completion_tokens": usage.completion_tokens if usage else None,
             "total_tokens": usage.total_tokens if usage else None,
         },
-        "system_prompt": system_prompt,
+        "base_system_prompt": base_system_prompt,
+        "rag_context": rag_context,
+        "retrieved_results": retrieved_results,
         "prompt_chain": request_messages,
         "response": response_text,
     }
     path.write_text(_render_audit_markdown(content), encoding="utf-8")
     return path
+
+
+def _append_response_footer(response_text: str, retrieved_results: list[RagResult]) -> str:
+    footer = _render_response_footer(retrieved_results)
+    if not footer or "Response Footer:" in response_text:
+        return response_text
+
+    print(footer)
+    if not response_text.strip():
+        return footer
+    return "\n\n".join([response_text.rstrip(), footer])
+
+
+def _render_response_footer(retrieved_results: list[RagResult]) -> str:
+    sources: list[str] = []
+    seen: set[tuple[str, str]] = set()
+
+    for result in retrieved_results:
+        canonical_url = _metadata_lookup(result.metadata, "canonical_url")
+        page_number = _metadata_lookup(result.metadata, "page_number")
+        if canonical_url is None or page_number is None:
+            continue
+
+        source_key = (str(canonical_url), str(page_number))
+        if source_key in seen:
+            continue
+        seen.add(source_key)
+        sources.append(f"- [{len(sources) + 1}]({canonical_url}#page={page_number})")
+
+    if not sources:
+        return ""
+
+    return "\n".join(
+        [
+            "Response Footer:",
+            "",
+            "---",
+            "",
+            "Sources:",
+            *sources,
+        ]
+    )
+
+
+def _metadata_lookup(metadata: dict[str, Any], key: str) -> Any:
+    if key in metadata:
+        return metadata[key]
+    prefixed_key = f"meta_{key}"
+    if prefixed_key in metadata:
+        return metadata[prefixed_key]
+    return None
 
 
 def _render_audit_markdown(content: dict[str, Any]) -> str:
@@ -183,6 +266,35 @@ def _render_audit_markdown(content: dict[str, Any]) -> str:
                 "",
             ]
         )
+    if content["retrieved_results"]:
+        lines.extend(["## Retrieved Results", ""])
+        for index, result in enumerate(content["retrieved_results"], start=1):
+            lines.extend(
+                [
+                    f"### Result {index}",
+                    f"- score: {result.score:.4f}",
+                    f"- id: {result.point_id}",
+                    "```text",
+                    result.text,
+                    "```",
+                    "",
+                ]
+            )
+            if result.metadata:
+                lines.append("```yaml")
+                lines.extend(_render_dict_as_lines(_result_metadata_for_log(result.metadata)))
+                lines.append("```")
+                lines.append("")
+    if content["rag_context"]:
+        lines.extend(
+            [
+                "## RAG Context",
+                "```text",
+                str(content["rag_context"]).rstrip(),
+                "```",
+                "",
+            ]
+        )
     lines.extend(
         [
             "## Response",
@@ -190,14 +302,37 @@ def _render_audit_markdown(content: dict[str, Any]) -> str:
             str(content["response"]).rstrip(),
             "```",
             "",
-            "## System Prompt",
+            "## Base System Prompt",
             "```text",
-            str(content["system_prompt"]).rstrip(),
+            str(content["base_system_prompt"]).rstrip(),
             "```",
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def _result_metadata_for_log(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {f"meta_{key}": value for key, value in metadata.items()}
+
+
+def _render_dict_as_lines(value: dict[str, Any], *, indent: int = 0) -> list[str]:
+    lines: list[str] = []
+    prefix = "  " * indent
+    for key, item in value.items():
+        if isinstance(item, dict):
+            lines.append(f"{prefix}{key}:")
+            lines.extend(_render_dict_as_lines(item, indent=indent + 1))
+        elif isinstance(item, list):
+            lines.append(f"{prefix}{key}:")
+            for entry in item:
+                if isinstance(entry, dict):
+                    lines.extend(_render_dict_as_lines(entry, indent=indent + 1))
+                else:
+                    lines.append(f"{prefix}  - {entry}")
+        else:
+            lines.append(f"{prefix}{key}: {item}")
+    return lines
 
 
 def _read_system_prompt() -> str:

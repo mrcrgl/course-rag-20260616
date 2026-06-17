@@ -50,10 +50,13 @@ It is intentionally simple, readable, and easy to extend.
 - `python -m rag_course chat` starts an interactive LLM chat loop and writes audit logs to `auditlog/`.
 - `python -m rag_course similarity` prompts for two lines and prints cosine similarity.
 - `python -m rag_course chunk INPUT OUTPUT` reads a local file path or an `http(s)` URL and writes chunk metadata to YAML.
+- `python -m rag_course chunk --chunker legal-pdf INPUT OUTPUT` chunks PDF sources page by page for legal texts.
 
 ## Chunking rules
 
 - Chunking is sentence-based and respects paragraph boundaries.
+- The `story` chunker is sentence-based and respects paragraph boundaries.
+- The `legal-pdf` chunker keeps PDF pages separate and is intended for statutes and similar long-form legal sources.
 - Headings in the form `1. Jakobs Haus.(1)` are treated as metadata, not chunk text.
 - Chunks never split a sentence in half.
 - Chunks with `min_words_per_chunk` or fewer words are dropped. The default is `2`.
@@ -77,6 +80,7 @@ It is intentionally simple, readable, and easy to extend.
 - `QDRANT_VECTOR_SIZE` sets the collection vector length. The default is `1536`.
 - `QDRANT_API_KEY` sets an optional Qdrant API key.
 - `--min-words` on the chunk command controls the minimum kept chunk length. The default is `2`.
+- `--chunker` on the chunk command selects the chunking strategy. The default is `story`; `legal-pdf` is available for PDF legal texts.
 - `--batch-size` on the `embed-chunks` command controls how many chunks are sent per embedding request. The default is `64`.
 
 ## Maintenance notes

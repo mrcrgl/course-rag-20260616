@@ -1,4 +1,4 @@
-"""Plain-text chunking for RAG ingestion."""
+"""Chunking strategies for RAG ingestion."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ _TERMINAL_SECTION_TITLES = {
 
 
 def chunk_text(text: str, *, config: ChunkerConfig, base_metadata: ChunkMetadata | None = None) -> list[Chunk]:
-    """Chunk plain text into sentence-aligned paragraph windows."""
+    """Chunk prose into sentence-aligned paragraph windows."""
 
     metadata_defaults = base_metadata or ChunkMetadata()
     paragraphs = _merge_dialogue_paragraphs(text, _extract_paragraphs(text))
@@ -130,6 +130,41 @@ def chunk_text(text: str, *, config: ChunkerConfig, base_metadata: ChunkMetadata
                 metadata_defaults=metadata_defaults,
             )
         )
+
+    return chunks
+
+
+def chunk_legal_pdf(
+    pages: list[str],
+    *,
+    config: ChunkerConfig,
+    base_metadata: ChunkMetadata | None = None,
+) -> list[Chunk]:
+    """Chunk legal PDF pages without crossing page boundaries."""
+
+    metadata_defaults = base_metadata or ChunkMetadata()
+    chunks: list[Chunk] = []
+
+    for page_number, page_text in enumerate(pages, start=1):
+        normalized_page_text = _normalize_pdf_page_text(page_text)
+        if not normalized_page_text:
+            continue
+
+        for paragraph in _extract_paragraphs(normalized_page_text):
+            sentences = _split_sentences(paragraph.text)
+            if not sentences:
+                continue
+
+            chunks.extend(
+                _chunk_paragraph(
+                    sentences,
+                    paragraph_start=paragraph.start,
+                    paragraph_number=paragraph.number,
+                    page_number=page_number,
+                    config=config,
+                    metadata_defaults=metadata_defaults,
+                )
+            )
 
     return chunks
 
@@ -214,6 +249,7 @@ def _chunk_paragraph(
     *,
     paragraph_start: int,
     paragraph_number: int,
+    page_number: int | None = None,
     config: ChunkerConfig,
     metadata_defaults: ChunkMetadata,
 ) -> list[Chunk]:
@@ -249,6 +285,7 @@ def _chunk_paragraph(
                 text=chunk_text,
                 metadata=_replace_metadata(
                     metadata_defaults,
+                    page_number=page_number if page_number is not None else metadata_defaults.page_number,
                     paragraph_number=paragraph_number,
                     position_start=chunk_start,
                     position_end=chunk_end,
@@ -286,6 +323,14 @@ def _normalize_inline_markup(text: str) -> str:
 
     normalized = _INLINE_MARKUP_RE.sub(_replace, text)
     return re.sub(r"\s{2,}", " ", normalized).strip()
+
+
+def _normalize_pdf_page_text(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"-\n(?=\w)", "", normalized)
+    normalized = re.sub(r"[ \t]+\n", "\n", normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized.strip()
 
 
 def _is_terminal_section(paragraph: str) -> bool:

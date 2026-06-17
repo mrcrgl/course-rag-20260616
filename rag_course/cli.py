@@ -75,6 +75,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target number of sentences per chunk.",
     )
     chunk_parser.add_argument(
+        "--chunker",
+        default="story",
+        choices=["story", "legal-pdf"],
+        help="Chunking strategy to use for the input source.",
+    )
+    chunk_parser.add_argument(
         "--canonical-url",
         help="Override the canonical URL stored in chunk metadata.",
     )
@@ -154,6 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 min_words_per_chunk=args.min_words,
                 overlap_sentences=args.overlap_sentences,
                 target_sentences_per_chunk=args.target_sentences,
+                chunker=args.chunker,
                 canonical_url=args.canonical_url,
                 author=args.author,
                 pii_classification=args.pii_classification,

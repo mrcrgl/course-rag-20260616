@@ -4,7 +4,7 @@ from datetime import datetime
 import re
 import unittest
 
-from rag_course.chunker import ChunkMetadata, ChunkerConfig, chunk_text
+from rag_course.chunker import ChunkMetadata, ChunkerConfig, chunk_legal_pdf, chunk_text
 from rag_course.sources import _rfc3339_from_http_date
 
 
@@ -63,6 +63,22 @@ class ChunkerTests(unittest.TestCase):
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uuid or "") for uuid in uuids))
         self.assertTrue(all(chunk.metadata.created_at is not None for chunk in chunks))
         self.assertTrue(all(datetime.fromisoformat(chunk.metadata.created_at or "") for chunk in chunks))
+
+    def test_chunk_legal_pdf_keeps_pages_separate(self) -> None:
+        pages = [
+            "§ 1 Intro.\n\nFirst page first sentence. First page second sentence.",
+            "§ 2 Next.\n\nSecond page first sentence. Second page second sentence.",
+        ]
+
+        chunks = chunk_legal_pdf(
+            pages,
+            config=ChunkerConfig(target_sentences_per_chunk=1, max_tokens_per_chunk=250),
+            base_metadata=ChunkMetadata(canonical_url="https://example.com/bgb.pdf"),
+        )
+
+        self.assertEqual([chunk.metadata.page_number for chunk in chunks], [1, 1, 1, 2, 2, 2])
+        self.assertTrue(all(chunk.metadata.headline_1 is None for chunk in chunks))
+        self.assertTrue(all(chunk.metadata.created_at is not None for chunk in chunks))
 
     def test_http_last_modified_is_normalized_to_rfc3339(self) -> None:
         normalized = _rfc3339_from_http_date("Sun, 14 Jun 2026 15:53:44 GMT")
